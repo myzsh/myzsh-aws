@@ -1,0 +1,24 @@
+#!/usr/bin/zsh
+
+aws(){
+	local verb="$1"
+	local mod="$2"
+
+	case "$verb" in
+	ssh)
+		# Use provided profile
+		profile="dev"
+		[ -z "$3" ] || profile="$3"
+
+		#snag the public dns
+		[ -n "$2" ] && pubdns=$(command aws ec2 describe-instances --instance-ids "$2" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
+		
+		[ -z "$pubdns" ] || ssh -A "$pubdns"
+	;;
+	*)
+		command aws "$@"
+	;;
+	esac
+}
+
+# vim: filetype=zsh noexpandtab
