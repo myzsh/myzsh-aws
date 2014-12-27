@@ -6,6 +6,16 @@ aws(){
 	local mod="$2"
 
 	case "$verb" in
+	ec2)
+		#remove verb and mod
+		argv=(${argv:3:$#argv})
+
+		if [ "$(echo $argv | grep -e '--profile\ ')" ]; then
+			command aws $verb $mod $argv
+		else
+			command aws $verb $mod $argv --profile $AWS_PROFILE
+		fi
+	;;
 	ssh)
 		if [ -n "$mod" ]; then
 			#remove verb and mod
