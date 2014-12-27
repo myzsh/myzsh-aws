@@ -7,9 +7,12 @@ aws(){
 	case "$verb" in
 	ssh)
 		if [ -n "$mod" ]; then
+			#remove verb and mod
+			argv=(${argv:3:$#argv})
+
 			# Use provided profile
 			profile="dev"
-			[ -n "$3" ] && profile="$3"
+			[ -n "${argv[1]}" ] && profile="${argv[1]}" && argv=(${argv:2:$#argv})
 
 			instance="$mod"
 			[[ "${instance:0:2}" != "i-" ]] && [ ${#instance} -eq 8 ] && instance="i-$mod"
@@ -17,7 +20,7 @@ aws(){
 			[ ${#instance} -eq 10 ] && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
 	
 			[ -z "$addr" ] && addr="$instance"
-			ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr"
+			ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" $argv
 		fi
 	;;
 		fi
