@@ -12,10 +12,7 @@ aws(){
 			[ -z "$3" ] || profile="$3"
 
 			instance="$2"
-			[ "${instance:0:2}" = "i-" ] || instance="i-$2"
-
-			#snag the public dns
-			pubdns=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
+			[[ "${instance:0:2}" != "i-" ]] && [ ${#instance} -eq 8 ] && instance="i-$2" && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
 		
 			[ -n "$addr" ] && ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr"
 		fi
