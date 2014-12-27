@@ -17,24 +17,67 @@ aws(){
 		fi
 	;;
 	ssh)
-		if [ -n "$mod" ]; then
+		case "$mod" in
+		list)
 			#remove verb and mod
 			argv=(${argv:3:$#argv})
 
-			# Use provided profile
-			profile=$AWS_PROFILE
-			[ -n "${argv[1]}" ] && profile="${argv[1]}" && argv=(${argv:2:$#argv})
+			#if it's a copy from the website, normalize it
+			[ ${#argv} -eq 1 ] && argv=($(echo $argv | awk 'BEGIN{ORS=""}{print $1}' | tr ":" " "))
 
-			instance="$mod"
-			[[ "${instance:0:2}" != "i-" ]] && [ ${#instance} -eq 8 ] && instance="i-$mod"
-			unset addr
-			[ ${#instance} -eq 10 ] && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
+			if [ -n "$argv" ];  then
+				cols="${#argv}"
+
+				# split panes
+				if [ $cols -gt 5 ]; then
+					cols=$(($cols/2 + $cols%2 - 1))
+					for i in {1..$cols}; do
+						tmux select-pane -t 0
+						tmux split-window -h
+					done
+
+					tmux select-layout even-horizontal 1>/dev/null
+
+					cols=$(($cols - ${#argv}%2))
+					for i in {0..$cols}; do
+						pane=$(($i * 2))
+						tmux select-pane -t $pane
+						tmux split-window -v
+					done
+				elif [ $cols -gt 1 ]; then
+					cols=$(($cols - 1))
+					for i in {1..$cols}; do
+						tmux select-pane -t 0
+						tmux split-window -h
+					done
+					tmux select-layout even-horizontal 1>/dev/null
+				fi
+
+				sleep 1
+				for i in $(tmux list-panes | cut -d ":" -f 1); do
+					tmux send-keys -t $i "aws ssh $argv[$(($i + 1))]" Enter
+				done
+			fi
+		;;
+		*)
+			if [ -n "$mod" ]; then
+				#remove verb and mod
+				argv=(${argv:3:$#argv})
+
+				# Use provided profile
+				profile=$AWS_PROFILE
+				[ -n "${argv[1]}" ] && profile="${argv[1]}" && argv=(${argv:2:$#argv})
+
+				instance="$mod"
+				[[ "${instance:0:2}" != "i-" ]] && [ ${#instance} -eq 8 ] && instance="i-$mod"
+				unset addr
+				[ ${#instance} -eq 10 ] && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
 	
-			[ -z "$addr" ] && addr="$instance"
-			ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" "$argv"
-		fi
-	;;
-		fi
+				[ -z "$addr" ] && addr="$instance"
+				ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" "$argv"
+			fi
+		;;
+		esac
 	;;
 	*)
 		command aws "$@"
