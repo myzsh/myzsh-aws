@@ -1,4 +1,5 @@
 #!/usr/bin/zsh
+globalvar AWS_PROFILE "dev" "Default profile to use when sending commands to aws"
 
 aws(){
 	local verb="$1"
@@ -11,7 +12,7 @@ aws(){
 			argv=(${argv:3:$#argv})
 
 			# Use provided profile
-			profile="dev"
+			profile=$AWS_PROFILE
 			[ -n "${argv[1]}" ] && profile="${argv[1]}" && argv=(${argv:2:$#argv})
 
 			instance="$mod"
@@ -20,7 +21,7 @@ aws(){
 			[ ${#instance} -eq 10 ] && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
 	
 			[ -z "$addr" ] && addr="$instance"
-			ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" $argv
+			ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" "$argv"
 		fi
 	;;
 		fi
