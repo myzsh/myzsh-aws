@@ -17,7 +17,7 @@ aws(){
 			#snag the public dns
 			pubdns=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
 		
-			[ -z "$pubdns" ] || ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$pubdns"
+			[ -n "$addr" ] && ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr"
 		fi
 	;;
 	*)
