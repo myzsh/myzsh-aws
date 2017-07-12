@@ -1,83 +1,53 @@
-#!/usr/bin/zsh
-globalvar AWS_PROFILE "dev" "Default profile to use when sending commands to aws"
+[ -f "$AWSPATH/.tmp_creds" ] && source "$AWSPATH/.tmp_creds"
 
-aws(){
+function aws(){
 	local verb="$1"
-	local mod="$2"
 
 	case "$verb" in
-	ec2)
-		#remove verb and mod
-		argv=(${argv:3:$#argv})
-
-		if [ "$(echo $argv | grep -e '--profile\ ')" ]; then
-			command aws $verb $mod $argv
-		else
-			command aws $verb $mod $argv --profile $AWS_PROFILE
-		fi
+	clearcreds)
+		for line in $(env | grep '^AWS_'); do
+			local name=$(echo $line | cut -d "=" -f 1)
+			unset "$name"
+		done
 	;;
-	ssh)
-		case "$mod" in
-		list)
-			#remove verb and mod
-			argv=(${argv:3:$#argv})
+	loadcreds)
+		if [ $# -eq 1 ]; then
+			myzsh error "Missing profile to load"
+			return 1
+		fi
 
-			#if it's a copy from the website, normalize it
-			[ ${#argv} -eq 1 ] && argv=($(echo $argv | awk 'BEGIN{ORS=""}{print $1}' | tr ":" " "))
+		local profile="$2"
+		for line in $(sed -n "/\[$profile\]/,/^\[/p" "$HOME/.aws/credentials" | grep -v '^\[.*\]$' | tr -d ' '); do
+			local name=$(echo $line | cut -d "=" -f 1 | tr '[:lower:]' '[:upper:]')
+			local value=$(echo $line | cut -d "=" -f 2)
+			export "$name=$value"
+		done
+	;;
+	mfauth)
+		local token
+		while ! [[ "$token" =~ ^[0-9]+$ ]]; do
+			vared -p 'MFA Token: ' -c token
+			! [[ "$token" =~ ^[0-9]+$ ]] && token=""
+		done
 
-			if [ -n "$argv" ];  then
-				cols="${#argv}"
+		unset AWS_SECRET_ACCESS_KEY
+		unset AWS_ACCESS_KEY_ID
+		unset AWS_SESSION_TOKEN
+		local output=$(command aws sts get-session-token --serial-number "$AWS_MFA_ARN" --token-code "$token")
 
-				# split panes
-				if [ $cols -gt 5 ]; then
-					cols=$(($cols/2 + $cols%2 - 1))
-					for i in {1..$cols}; do
-						tmux select-pane -t 0
-						tmux split-window -h
-					done
+		local secret_access_key=$(echo $output | grep "SecretAccessKey" | cut -d ":" -f 2 | sed -e 's/^\ *"//' -e 's/",*\ *$//')
+		local access_key=$(echo $output | grep "AccessKeyId" | cut -d ":" -f 2 | sed -e 's/^\ *"//' -e 's/",*\ *$//')
+		local session_token=$(echo $output | grep "SessionToken" | cut -d ":" -f 2 | sed -e 's/^\ *"//' -e 's/",*\ *$//')
 
-					tmux select-layout even-horizontal 1>/dev/null
+		if [ -n "$secret_access_key" ] || [ -n "$access_key" ] || [ -n "$session_token" ]; then
+			export AWS_SECRET_ACCESS_KEY="$secret_access_key"
+			export AWS_ACCESS_KEY_ID="$access_key"
+			export AWS_SESSION_TOKEN="$session_token"
 
-					cols=$(($cols - ${#argv}%2))
-					for i in {0..$cols}; do
-						pane=$(($i * 2))
-						tmux select-pane -t $pane
-						tmux split-window -v
-					done
-				elif [ $cols -gt 1 ]; then
-					cols=$(($cols - 1))
-					for i in {1..$cols}; do
-						tmux select-pane -t 0
-						tmux split-window -h
-					done
-					tmux select-layout even-horizontal 1>/dev/null
-				fi
-
-				sleep 1
-				for i in $(tmux list-panes | cut -d ":" -f 1); do
-					tmux send-keys -t $i "aws ssh $argv[$(($i + 1))]" Enter
-				done
-			fi
-		;;
-		*)
-			if [ -n "$mod" ]; then
-				#remove verb and mod
-				argv=(${argv:3:$#argv})
-
-				# Use provided profile
-				profile=$AWS_PROFILE
-				[ -n "${argv[1]}" ] && profile="${argv[1]}" && argv=(${argv:2:$#argv})
-
-				instance="$mod"
-				[[ "${instance:0:2}" != "i-" ]] && [ ${#instance} -eq 8 ] && instance="i-$mod"
-				unset addr
-				[ ${#instance} -eq 10 ] && addr=$(command aws ec2 describe-instances --instance-ids "$instance" --profile "$profile" 2>&1 | grep PublicDnsName | head -n 1 | cut -d "\"" -f 4)
-	
-				[ -z "$addr" ] && addr="$instance"
-				ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$addr" "$argv"
-			fi
-		;;
-		esac
+			echo "export AWS_SECRET_ACCESS_KEY=\"$secret_access_key\"" > "$AWSPATH/.tmp_creds"
+			echo "export AWS_ACCESS_KEY_ID=\"$access_key\"" >> "$AWSPATH/.tmp_creds"
+			echo "export AWS_SESSION_TOKEN=\"$session_token\"" >> "$AWSPATH/.tmp_creds"
+		fi
 	;;
 	*)
 		command aws "$@"
